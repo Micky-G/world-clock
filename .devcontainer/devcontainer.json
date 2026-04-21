@@ -1,0 +1,29 @@
+{
+    "name": "World Clock",
+    "build": {
+        "dockerfile": "Dockerfile",
+        "context": ".."
+    },
+    "workspaceFolder": "/workspace",
+    "workspaceMount": "source=${localWorkspaceFolder},target=/workspace,type=bind",
+
+    // Forward the host X11 socket so the tkinter window renders on the host display
+    "runArgs": [
+        "--env=DISPLAY=${localEnv:DISPLAY}",
+        "--volume=/tmp/.X11-unix:/tmp/.X11-unix"
+    ],
+
+    "remoteUser": "vscode",
+
+    "customizations": {
+        "vscode": {
+            "extensions": [
+                "ms-python.python",
+                "ms-python.pylint"
+            ],
+            "settings": {
+                "python.defaultInterpreterPath": "/usr/bin/python3"
+            }
+        }
+    }
+}
