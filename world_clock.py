@@ -50,6 +50,7 @@ CITIES = [
     ("Cairo",        "Africa/Cairo",                     30.04,   31.24),
     ("Lagos",        "Africa/Lagos",                      6.45,    3.39),
     ("Nairobi",      "Africa/Nairobi",                   -1.29,   36.82),
+    ("Cape Town",    "Africa/Johannesburg",             -33.93,   18.42),
     ("Dubai",        "Asia/Dubai",                       25.20,   55.27),
     ("Mumbai",       "Asia/Kolkata",                     19.08,   72.88),
     ("Bangkok",      "Asia/Bangkok",                     13.75,  100.52),
