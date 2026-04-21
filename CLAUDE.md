@@ -19,7 +19,7 @@ Single-file app: `world_clock.py`. All logic, layout, and rendering lives there.
 **Data flow each second** (`WorldClockApp._tick` → every 1 000 ms):
 1. Update UTC header label
 2. `GeochronCanvas.refresh()` — redraws city dots/labels every second; recomposites the full map only when the UTC minute changes (~100–150 ms Pillow operation)
-3. `CityStrip.refresh()` — updates 24 `StringVar` city-time labels
+3. `CityStrip.refresh()` — updates city-time `StringVar` labels and calls `update_icon()` on each visible `CityColumn`
 4. `CityFlyout.refresh_time()` — updates the time label in any open flyout
 
 **Map rendering** (once per minute inside `GeochronCanvas._redraw_map`):
@@ -52,6 +52,12 @@ Single-file app: `world_clock.py`. All logic, layout, and rendering lives there.
 **Bottom strip** (`CityStrip`):
 - Shows `STRIP_VISIBLE = 10` city tiles at a time with `◀`/`▶` scroll buttons
 - `CityColumn` tiles have 500 ms open / 500 ms close delays for the flyout; the overlay appears and hides immediately
+- Each tile shows a day/night icon (top), city name, and local time. Icon character, icon colour, and time label colour are all driven by the city's local hour — day constants: `STRIP_DAY_ICON`, `STRIP_DAY_FG`, `STRIP_DAY_TIME_FG`; night constants: `STRIP_NIGHT_ICON`, `STRIP_NIGHT_FG`, `STRIP_NIGHT_TIME_FG`; boundary: `STRIP_DAY_HOURS`. All are configurable at the top of the file.
+- `CityStrip` keeps `self._columns` (the currently rendered `CityColumn` instances). `refresh()` calls `col.update_icon(icon, icon_fg, time_fg)` on each; `_render()` rebuilds `self._columns` on every scroll. Non-visible columns are destroyed and recreated, so their icon and colours are computed fresh in `_render()` rather than maintained via a `StringVar` (tkinter labels don't support a `StringVar` for `fg`)
+
+## Development iteration
+
+`make shell` bind-mounts the source read-write. Inside the container, run `python3 /workspace/world_clock.py` directly and edit files on the host; restart the process to pick up changes. No test suite exists.
 
 ## Adding/removing cities
 
@@ -60,6 +66,12 @@ Edit the `CITIES` list in `world_clock.py`:
 ("City Name", "Continent/Timezone", lat_float, lon_float),
 ```
 Timezone strings must be valid IANA tz names (used directly by `zoneinfo.ZoneInfo`).
+
+If the city's Wikipedia article title differs from its display name, add an entry to `_WIKI_TITLES` (e.g. `"New York": "New_York_City"`).
+
+## Layout building order
+
+`WorldClockApp.__init__` calls `_build_strip` **before** `_build_map`. This is required: tkinter resolves `side=tk.BOTTOM` relative to unallocated space at the time of packing, so the strip must be packed first or it will be hidden behind the canvas.
 
 ## Key constraints
 

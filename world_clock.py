@@ -33,19 +33,22 @@ TZ_FG      = "#3fb950"
 # ── Configurable strip behaviour ────────────────────────────────────────────
 STRIP_VISIBLE     = 10    # city tiles shown at once in the bottom strip
 STRIP_HOVER_SCALE = 1.25  # scale factor for CityColumnOverlay font sizes
+STRIP_DAY_ICON    = "☀"        # shown when local hour is within STRIP_DAY_HOURS
+STRIP_NIGHT_ICON  = "🌗"       # shown outside STRIP_DAY_HOURS
+STRIP_DAY_HOURS   = range(6, 20) # 06:00–19:59 inclusive
+STRIP_DAY_FG      = "#ffcc00"    # yellow sun
+STRIP_NIGHT_FG    = "#8b949e"    # gray moon
+STRIP_DAY_TIME_FG   = "#ffcc00"  # time label colour during the day
+STRIP_NIGHT_TIME_FG = "#90caf9"  # time label colour at night
 
 # ── Cities: (name, tz, lat°N, lon°E) ───────────────────────────────────────
 CITIES = [
     ("New York",     "America/New_York",                 40.71,  -74.01),
     ("Los Angeles",  "America/Los_Angeles",              34.05, -118.24),
-    ("Chicago",      "America/Chicago",                  41.88,  -87.63),
-    ("Toronto",      "America/Toronto",                  43.65,  -79.38),
     ("São Paulo",    "America/Sao_Paulo",               -23.55,  -46.63),
     ("Buenos Aires", "America/Argentina/Buenos_Aires",  -34.60,  -58.38),
     ("London",       "Europe/London",                    51.51,   -0.13),
-    ("Paris",        "Europe/Paris",                     48.85,    2.35),
     ("Berlin",       "Europe/Berlin",                    52.52,   13.41),
-    ("Amsterdam",    "Europe/Amsterdam",                 52.37,    4.90),
     ("Moscow",       "Europe/Moscow",                    55.75,   37.62),
     ("Cairo",        "Africa/Cairo",                     30.04,   31.24),
     ("Lagos",        "Africa/Lagos",                      6.45,    3.39),
@@ -56,7 +59,6 @@ CITIES = [
     ("Bangkok",      "Asia/Bangkok",                     13.75,  100.52),
     ("Singapore",    "Asia/Singapore",                    1.35,  103.82),
     ("Hong Kong",    "Asia/Hong_Kong",                   22.32,  114.17),
-    ("Shanghai",     "Asia/Shanghai",                    31.23,  121.47),
     ("Tokyo",        "Asia/Tokyo",                       35.68,  139.69),
     ("Seoul",        "Asia/Seoul",                       37.57,  126.98),
     ("Sydney",       "Australia/Sydney",                -33.87,  151.21),
@@ -420,17 +422,18 @@ class GeochronCanvas(tk.Canvas):
             x, y     = self._latlon_to_xy(lat, lon)
             positions.append((x, y))
             now      = datetime.datetime.now(tz)
-            daytime  = 6 <= now.hour < 20
-            dot_fill = "#ffcc00" if daytime else "#4a9fd4"
+            daytime   = 6 <= now.hour < 20
+            dot_fill  = "#ffcc00" if daytime else "#4a9fd4"
+            time_fill = "#ffcc00" if daytime else "#90caf9"
             r = 3
             self.create_oval(x-r, y-r, x+r, y+r,
                              fill=dot_fill, outline="#ffffff",
                              width=1, tags="cities")
             self.create_text(x, y-6, text=name,
-                             fill="#ffffff", font=("Sans", 7, "bold"),
+                             fill="#ffffff", font=("Sans", 11, "bold"),
                              anchor="s", tags="cities")
             self.create_text(x, y+6, text=now.strftime("%H:%M"),
-                             fill=dot_fill, font=("Monospace", 7),
+                             fill=time_fill, font=("Monospace", 11),
                              anchor="n", tags="cities")
         self._city_positions = positions
 
@@ -468,13 +471,16 @@ class CityColumn(tk.Frame):
     after a 500 ms delay; moving away hides the overlay and closes the flyout
     after a 500 ms delay.
     """
-    _NAME_SIZE   = 7
-    _TIME_SIZE   = 9
+    _ICON_SIZE   = 20
+    _NAME_SIZE   = 9
+    _TIME_SIZE   = 11
     _OPEN_DELAY  = 500   # ms before flyout opens
     _CLOSE_DELAY = 500   # ms before flyout closes
 
     def __init__(self, parent, name: str, t_var: tk.StringVar,
-                 tz: ZoneInfo, flyout: "CityFlyout", overlay: "CityColumnOverlay"):
+                 tz: ZoneInfo, flyout: "CityFlyout", overlay: "CityColumnOverlay",
+                 icon: str = STRIP_DAY_ICON, icon_fg: str = STRIP_DAY_FG,
+                 time_fg: str = STRIP_DAY_TIME_FG):
         super().__init__(parent, bg=CARD_BG, padx=6, pady=3)
         self._name    = name
         self._t_var   = t_var
@@ -484,14 +490,22 @@ class CityColumn(tk.Frame):
         self._open_job  = None
         self._close_job = None
 
+        self._icon_lbl = tk.Label(self, text=icon, bg=CARD_BG, fg=icon_fg,
+                                  font=("Sans", self._ICON_SIZE))
+        self._icon_lbl.pack()
         tk.Label(self, text=name, bg=CARD_BG, fg=DATE_FG,
                  font=("Sans", self._NAME_SIZE)).pack()
-        tk.Label(self, textvariable=t_var, bg=CARD_BG, fg=TIME_FG,
-                 font=("Monospace", self._TIME_SIZE, "bold")).pack()
+        self._time_lbl = tk.Label(self, textvariable=t_var, bg=CARD_BG, fg=time_fg,
+                                  font=("Monospace", self._TIME_SIZE, "bold"))
+        self._time_lbl.pack()
 
-        for w in (self,) + tuple(self.winfo_children()):
+        for w in (self, *self.winfo_children()):
             w.bind("<Enter>", self._on_enter)
             w.bind("<Leave>", self._on_leave)
+
+    def update_icon(self, icon: str, icon_fg: str, time_fg: str):
+        self._icon_lbl.config(text=icon, fg=icon_fg)
+        self._time_lbl.config(fg=time_fg)
 
     def _on_enter(self, _event):
         if self._close_job:
@@ -539,6 +553,7 @@ class CityColumnOverlay(tk.Frame):
     Appears immediately on column hover; hides when mouse leaves both
     the overlay and its associated column.
     """
+    _ICON_SIZE = round(CityColumn._ICON_SIZE * STRIP_HOVER_SCALE)
     _NAME_SIZE = round(CityColumn._NAME_SIZE * STRIP_HOVER_SCALE)
     _TIME_SIZE = round(CityColumn._TIME_SIZE * STRIP_HOVER_SCALE)
 
@@ -548,6 +563,9 @@ class CityColumnOverlay(tk.Frame):
         self._app    = app
         self._column = None  # currently-hovered CityColumn
 
+        self._icon_lbl = tk.Label(self, text="", bg=CARD_BG, fg=STRIP_DAY_FG,
+                                  font=("Sans", self._ICON_SIZE))
+        self._icon_lbl.pack()
         self._name_lbl = tk.Label(self, text="", bg=CARD_BG, fg=DATE_FG,
                                   font=("Sans", self._NAME_SIZE))
         self._name_lbl.pack()
@@ -555,14 +573,17 @@ class CityColumnOverlay(tk.Frame):
                                   font=("Monospace", self._TIME_SIZE, "bold"))
         self._time_lbl.pack()
 
-        for w in (self, self._name_lbl, self._time_lbl):
+        for w in (self, self._icon_lbl, self._name_lbl, self._time_lbl):
             w.bind("<Enter>", self._on_enter)
             w.bind("<Leave>", self._on_leave)
 
     def show_over(self, column: CityColumn):
         self._column = column
+        self._icon_lbl.config(text=column._icon_lbl.cget("text"),
+                               fg=column._icon_lbl.cget("fg"))
         self._name_lbl.config(text=column._name)
-        self._time_lbl.config(textvariable=column._t_var)
+        self._time_lbl.config(textvariable=column._t_var,
+                               fg=column._time_lbl.cget("fg"))
         self._app.update_idletasks()
         ow = self.winfo_reqwidth()
         oh = self.winfo_reqheight()
@@ -617,6 +638,7 @@ class CityStrip(tk.Frame):
         self._entries: list[tuple[str, ZoneInfo, tk.StringVar]] = []
         for name, tz_name, _lat, _lon in cities:
             self._entries.append((name, ZoneInfo(tz_name), tk.StringVar()))
+        self._columns: list[CityColumn] = []
 
         self._btn_l = tk.Button(self, text="◀", command=self._scroll_left,
                                 **self._BTN)
@@ -634,14 +656,27 @@ class CityStrip(tk.Frame):
     def refresh(self):
         for _, tz, t_var in self._entries:
             t_var.set(datetime.datetime.now(tz).strftime("%H:%M"))
+        for col in self._columns:
+            now = datetime.datetime.now(col._tz)
+            day = now.hour in STRIP_DAY_HOURS
+            col.update_icon(STRIP_DAY_ICON     if day else STRIP_NIGHT_ICON,
+                            STRIP_DAY_FG       if day else STRIP_NIGHT_FG,
+                            STRIP_DAY_TIME_FG  if day else STRIP_NIGHT_TIME_FG)
 
     def _render(self):
         for w in self._city_frame.winfo_children():
             w.destroy()
+        self._columns = []
         for name, tz, t_var in self._entries[self._offset:
-                                              self._offset + self._visible]:
-            col = CityColumn(self._city_frame, name, t_var, tz, self._flyout, self._overlay)
+                                             self._offset + self._visible]:
+            now = datetime.datetime.now(tz)
+            day = now.hour in STRIP_DAY_HOURS
+            col = CityColumn(self._city_frame, name, t_var, tz, self._flyout, self._overlay,
+                             STRIP_DAY_ICON    if day else STRIP_NIGHT_ICON,
+                             STRIP_DAY_FG      if day else STRIP_NIGHT_FG,
+                             STRIP_DAY_TIME_FG if day else STRIP_NIGHT_TIME_FG)
             col.pack(side=tk.LEFT, fill=tk.Y, expand=True)
+            self._columns.append(col)
         max_off = max(0, len(self._entries) - self._visible)
         self._btn_l.config(state=tk.NORMAL if self._offset > 0      else tk.DISABLED)
         self._btn_r.config(state=tk.NORMAL if self._offset < max_off else tk.DISABLED)
@@ -667,7 +702,7 @@ class WorldClockApp(tk.Tk):
 
     def __init__(self):
         super().__init__()
-        self.title("Geochron World Clock")
+        self.title("World Clock")
         self.configure(bg=BG)
         self.minsize(800, 480)
         self._flyout  = CityFlyout(self)
@@ -681,7 +716,7 @@ class WorldClockApp(tk.Tk):
     def _build_header(self):
         bar = tk.Frame(self, bg=HEADER_BG)
         bar.pack(fill=tk.X)
-        tk.Label(bar, text="  GEOCHRON WORLD CLOCK",
+        tk.Label(bar, text="  WORLD CLOCK",
                  bg=HEADER_BG, fg=CITY_FG,
                  font=("Sans", 15, "bold"), pady=8).pack(side=tk.LEFT)
         self._utc_var = tk.StringVar()
