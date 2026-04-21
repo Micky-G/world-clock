@@ -19,7 +19,7 @@ Single-file app: `world_clock.py`. All logic, layout, and rendering lives there.
 **Data flow each second** (`WorldClockApp._tick` → every 1 000 ms):
 1. Update UTC header label
 2. `GeochronCanvas.refresh()` — redraws city dots/labels every second; recomposites the full map only when the UTC minute changes (~100–150 ms Pillow operation)
-3. `CityStrip.refresh()` — updates city-time `StringVar` labels and calls `update_icon()` on each visible `CityColumn`
+3. `CityStrip.refresh()` — updates city-time `StringVar` labels and calls `update_icon()` on each visible `CityColumn` (skipped entirely when the strip is hidden)
 4. `CityFlyout.refresh_time()` — updates the time label in any open flyout
 
 **Map rendering** (once per minute inside `GeochronCanvas._redraw_map`):
@@ -48,6 +48,11 @@ Single-file app: `world_clock.py`. All logic, layout, and rendering lives there.
 - Shows a scaled-up version of the hovered tile (`STRIP_HOVER_SCALE = 1.25`) immediately (no delay), anchored so its bottom aligns with the column bottom — gives the appearance of the button growing upward
 - Uses `winfo_reqheight()` to measure the overlay height before placement — **never** temporarily place at `y=0` to measure, it causes a visible flash
 - Hides when mouse leaves both the column and the overlay itself; enter/leave bindings on the overlay cancel the flyout's close timer to keep the flyout open while mouse is in the enlarged area
+
+**Settings window** (`SettingsWindow`):
+- `tk.Toplevel` created once in `WorldClockApp.__init__` and reused — closing it calls `withdraw()` rather than destroying it
+- Opened/closed by the ⚙ gear button in the header; positions itself just below the gear button on open
+- Strip visibility is driven by a shared `tk.BooleanVar` (`_strip_var`) — the checkbox in the settings window and `_apply_strip_visible()` both read from it
 
 **Bottom strip** (`CityStrip`):
 - Shows `STRIP_VISIBLE = 10` city tiles at a time with `◀`/`▶` scroll buttons

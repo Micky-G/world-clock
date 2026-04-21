@@ -698,6 +698,44 @@ class CityStrip(tk.Frame):
 
 # ── Main window ─────────────────────────────────────────────────────────────
 
+# ── Settings window ──────────────────────────────────────────────────────────
+
+class SettingsWindow(tk.Toplevel):
+    """Floating settings panel opened via the gear button in the header."""
+
+    def __init__(self, app: tk.Tk, strip_var: tk.BooleanVar,
+                 on_strip_toggle):
+        super().__init__(app)
+        self.title("Settings")
+        self.configure(bg=CARD_BG)
+        self.resizable(False, False)
+        self.protocol("WM_DELETE_WINDOW", self.withdraw)
+
+        tk.Label(self, text="Display", bg=CARD_BG, fg=DATE_FG,
+                 font=("Sans", 9, "bold"), padx=12, pady=6,
+                 anchor="w").pack(fill=tk.X)
+        tk.Frame(self, bg=BORDER_CLR, height=1).pack(fill=tk.X, padx=12)
+        tk.Checkbutton(self, text="Show city strip",
+                       variable=strip_var, command=on_strip_toggle,
+                       bg=CARD_BG, fg=CITY_FG,
+                       selectcolor=BG, activebackground=CARD_BG,
+                       activeforeground=CITY_FG,
+                       font=("Sans", 10), padx=12, pady=8,
+                       anchor="w", cursor="hand2").pack(fill=tk.X)
+        self.withdraw()
+
+    def toggle(self, near_x: int, near_y: int):
+        if self.winfo_viewable():
+            self.withdraw()
+        else:
+            self.geometry(f"+{near_x}+{near_y}")
+            self.deiconify()
+            self.lift()
+            self.focus_force()
+
+
+# ── Main window ──────────────────────────────────────────────────────────────
+
 class WorldClockApp(tk.Tk):
 
     def __init__(self):
@@ -705,12 +743,15 @@ class WorldClockApp(tk.Tk):
         self.title("World Clock")
         self.configure(bg=BG)
         self.minsize(800, 480)
-        self._flyout  = CityFlyout(self)
-        self._overlay = CityColumnOverlay(self)
+        self._flyout       = CityFlyout(self)
+        self._overlay      = CityColumnOverlay(self)
+        self._strip_var    = tk.BooleanVar(value=True)
         self._build_header()
         tk.Frame(self, bg=SEP_CLR, height=1).pack(fill=tk.X)
         self._build_strip()
         self._build_map()
+        self._settings_win = SettingsWindow(self, self._strip_var,
+                                            self._apply_strip_visible)
         self._tick()
 
     def _build_header(self):
@@ -719,6 +760,13 @@ class WorldClockApp(tk.Tk):
         tk.Label(bar, text="  WORLD CLOCK",
                  bg=HEADER_BG, fg=CITY_FG,
                  font=("Sans", 15, "bold"), pady=8).pack(side=tk.LEFT)
+        self._gear_btn = tk.Button(bar, text="⚙",
+                                   command=self._open_settings,
+                                   bg=HEADER_BG, fg=DATE_FG,
+                                   activebackground=CARD_BG, activeforeground=CITY_FG,
+                                   relief=tk.FLAT, bd=0,
+                                   font=("Sans", 13), padx=10, cursor="hand2")
+        self._gear_btn.pack(side=tk.RIGHT)
         self._utc_var = tk.StringVar()
         tk.Label(bar, textvariable=self._utc_var,
                  bg=HEADER_BG, fg=DATE_FG,
@@ -729,15 +777,33 @@ class WorldClockApp(tk.Tk):
         self._map.pack(fill=tk.BOTH, expand=True)
 
     def _build_strip(self):
-        tk.Frame(self, bg=SEP_CLR, height=1).pack(fill=tk.X)
+        self._strip_sep = tk.Frame(self, bg=SEP_CLR, height=1)
+        self._strip_sep.pack(fill=tk.X)
         self._strip = CityStrip(self, self, CITIES, self._flyout, self._overlay)
         self._strip.pack(fill=tk.X, side=tk.BOTTOM)
+
+    def _open_settings(self):
+        self.update_idletasks()
+        bx = self._gear_btn.winfo_rootx()
+        by = self._gear_btn.winfo_rooty() + self._gear_btn.winfo_height()
+        self._settings_win.toggle(bx, by)
+
+    def _apply_strip_visible(self):
+        if self._strip_var.get():
+            self._strip_sep.pack(fill=tk.X)
+            self._strip.pack(fill=tk.X, side=tk.BOTTOM)
+        else:
+            self._flyout.close()
+            self._overlay.hide()
+            self._strip.pack_forget()
+            self._strip_sep.pack_forget()
 
     def _tick(self):
         utc = datetime.datetime.now(datetime.timezone.utc)
         self._utc_var.set(f"UTC  {utc.strftime('%H:%M:%S   %d %b %Y')}  ")
         self._map.refresh(utc_now=utc)
-        self._strip.refresh()
+        if self._strip_var.get():
+            self._strip.refresh()
         self._flyout.refresh_time()
         self.after(1000, self._tick)
 
