@@ -17,9 +17,10 @@ All development happens inside the Docker container — nothing is installed on 
 Single-file app: `world_clock.py`. All logic, layout, and rendering lives there.
 
 **Data flow each second** (`WorldClockApp._tick` → every 1 000 ms):
-1. Update UTC header label (every second)
+1. Update UTC header label
 2. `GeochronCanvas.refresh()` — redraws city dots/labels every second; recomposites the full map only when the UTC minute changes (~100–150 ms Pillow operation)
-3. `CityStrip.refresh()` — updates 24 `StringVar` city-time labels (every second)
+3. `CityStrip.refresh()` — updates 24 `StringVar` city-time labels
+4. `CityFlyout.refresh_time()` — updates the time label in any open flyout
 
 **Map rendering** (once per minute inside `GeochronCanvas._redraw_map`):
 - `_solar_decl_eot()` → solar declination + equation of time (Spencer 1971, pure stdlib)
@@ -33,6 +34,24 @@ Single-file app: `world_clock.py`. All logic, layout, and rendering lives there.
 **Map assets** (baked into the Docker image at build time, not in the repo):
 - `/opt/worldclock/assets/world_map_day.png` — NASA Blue Marble 2048×1024
 - `/opt/worldclock/assets/world_map_night.png` — NASA Earth at Night, resized to match day map
+
+**City info flyout** (`CityFlyout`):
+- Single shared instance created on the root `tk.Tk` window and passed to both `GeochronCanvas` and `CityStrip`
+- Triggered by clicking a city dot on the map, or hovering a strip tile for 500 ms
+- Fetches Wikipedia summary + thumbnail in a background thread (`_fetch_wiki`, `_download_image`) using the Wikipedia REST API
+- Positioned using root-relative coordinates (`winfo_rootx/y()` relative to `app.winfo_rootx/y()`) so it can appear anywhere on screen
+- Closes after 1 000 ms (map click) or 500 ms (strip hover) once mouse leaves; close timer is cancelled when mouse re-enters the flyout
+- `_app` attribute stores the root window reference — **do not name this `_root`** as that shadows a tkinter internal method and causes `TypeError`
+
+**Strip hover overlay** (`CityColumnOverlay`):
+- Second shared instance on the root window, passed through `CityStrip` → `CityColumn`
+- Shows a scaled-up version of the hovered tile (`STRIP_HOVER_SCALE = 1.25`) immediately (no delay), anchored so its bottom aligns with the column bottom — gives the appearance of the button growing upward
+- Uses `winfo_reqheight()` to measure the overlay height before placement — **never** temporarily place at `y=0` to measure, it causes a visible flash
+- Hides when mouse leaves both the column and the overlay itself; enter/leave bindings on the overlay cancel the flyout's close timer to keep the flyout open while mouse is in the enlarged area
+
+**Bottom strip** (`CityStrip`):
+- Shows `STRIP_VISIBLE = 10` city tiles at a time with `◀`/`▶` scroll buttons
+- `CityColumn` tiles have 500 ms open / 500 ms close delays for the flyout; the overlay appears and hides immediately
 
 ## Adding/removing cities
 
@@ -48,3 +67,4 @@ Timezone strings must be valid IANA tz names (used directly by `zoneinfo.ZoneInf
 - **Multiline Python in `RUN` Dockerfile instructions** will cause a parse error if any line starts with `from` — Docker misreads it as a `FROM` instruction. Keep `-c` arguments as one-liners with semicolons.
 - **Ubuntu 24.04** ships a built-in `ubuntu` user at UID/GID 1000; the Dockerfile renames it to `vscode` rather than creating a new user, to avoid a GID collision.
 - The `<Configure>` binding on `GeochronCanvas` handles window resize by forcing a full map redraw.
+- `winfo_containing(x_root, y_root)` + walking the `master` chain is the pattern used throughout for "is the mouse still inside widget X or its children" checks in `_on_leave` handlers.
