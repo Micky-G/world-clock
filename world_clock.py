@@ -745,13 +745,14 @@ class WorldClockApp(tk.Tk):
         self.minsize(800, 480)
         self._flyout       = CityFlyout(self)
         self._overlay      = CityColumnOverlay(self)
-        self._strip_var    = tk.BooleanVar(value=True)
+        self._strip_var    = tk.BooleanVar(value=False)
         self._build_header()
         tk.Frame(self, bg=SEP_CLR, height=1).pack(fill=tk.X)
         self._build_strip()
         self._build_map()
         self._settings_win = SettingsWindow(self, self._strip_var,
                                             self._apply_strip_visible)
+        self._apply_strip_visible()
         self._tick()
 
     def _build_header(self):
