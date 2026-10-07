@@ -102,8 +102,13 @@ def _elevation_lat(lon_deg, sub_lon_deg, decl_rad, elev_deg=0.0):
     if ratio > 1.0:
         return 90.0
     if ratio < -1.0:
-        return -90.0
-    return math.degrees(math.asin(ratio) - math.atan2(b, a))
+        return -90.0 if a >= 0 else 90.0
+    lat = math.asin(ratio) - math.atan2(b, a)
+    if a < 0:
+        # Sun south of the equator: the other asin branch is the valid one
+        lat = math.pi - math.asin(ratio) - math.atan2(b, a)
+        lat = (lat + math.pi) % (2 * math.pi) - math.pi
+    return math.degrees(lat)
 
 
 def _fmt_utc_offset(dt: datetime.datetime) -> str:
@@ -779,9 +784,9 @@ class WorldClockApp(tk.Tk):
 
     def _build_strip(self):
         self._strip_sep = tk.Frame(self, bg=SEP_CLR, height=1)
-        self._strip_sep.pack(fill=tk.X)
         self._strip = CityStrip(self, self, CITIES, self._flyout, self._overlay)
         self._strip.pack(fill=tk.X, side=tk.BOTTOM)
+        self._strip_sep.pack(fill=tk.X, side=tk.BOTTOM)
 
     def _open_settings(self):
         self.update_idletasks()
@@ -791,8 +796,8 @@ class WorldClockApp(tk.Tk):
 
     def _apply_strip_visible(self):
         if self._strip_var.get():
-            self._strip_sep.pack(fill=tk.X)
             self._strip.pack(fill=tk.X, side=tk.BOTTOM)
+            self._strip_sep.pack(fill=tk.X, side=tk.BOTTOM)
         else:
             self._flyout.close()
             self._overlay.hide()
