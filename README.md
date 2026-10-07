@@ -56,3 +56,7 @@ The timezone must be a valid IANA name, such as `Europe/London`. If the city's W
 ## Credits
 
 Map imagery from NASA Visible Earth: Blue Marble and Earth at Night.
+
+## License
+
+MIT. See [LICENSE](LICENSE).
