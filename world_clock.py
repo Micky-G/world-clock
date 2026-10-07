@@ -220,6 +220,7 @@ class CityFlyout(tk.Frame):
         self._close_job  = None
         self._close_delay = 1000
         self._city_tz    = None
+        self._city_name  = None
         self._city_photo = None
 
         # Top row: info (left) + thumbnail (right)
@@ -271,6 +272,7 @@ class CityFlyout(tk.Frame):
         self._cancel_close()
         self._close_delay = close_delay
         self._city_tz     = tz
+        self._city_name   = name
         self._name_lbl.config(text=name)
         self._refresh_time()
         self._desc_lbl.config(text="")
@@ -304,6 +306,7 @@ class CityFlyout(tk.Frame):
         self.place_forget()
         self._close_job  = None
         self._city_tz    = None
+        self._city_name  = None
         self._city_photo = None
         self._img_lbl.config(image="")
 
@@ -318,10 +321,11 @@ class CityFlyout(tk.Frame):
     def _bg_fetch(self, city_name):
         desc, extract, thumb_url = _fetch_wiki(city_name)
         img = _download_image(thumb_url)
-        self._app.after(0, lambda: self._apply(desc, extract, img))
+        self._app.after(0, lambda: self._apply(city_name, desc, extract, img))
 
-    def _apply(self, desc, extract, img):
-        if not self.winfo_ismapped():
+    def _apply(self, city_name, desc, extract, img):
+        # Drop results for a city the flyout is no longer showing
+        if not self.winfo_ismapped() or city_name != self._city_name:
             return
         self._desc_lbl.config(text=desc)
         self._extract_lbl.config(text=extract or "No information available.")
