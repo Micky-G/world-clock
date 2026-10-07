@@ -2,6 +2,8 @@
 
 A Geochron-style desktop world clock. It shows a world map with a live day/night blend, city lights on the night side, and the local time for 20 cities.
 
+![World Clock showing the day/night map, a city flyout for Tokyo and the city strip](screenshot.png)
+
 ## Features
 
 - Day/night terminator with a soft civil-twilight fade, updated every minute
